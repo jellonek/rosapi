@@ -147,7 +147,10 @@ class RosAPI(object):
     def write_string(self, string):
         sent_overal = 0
         while sent_overal < len(string):
-            sent = self.socket.send(string[sent_overal:])
+            try:
+                sent = self.socket.send(string[sent_overal:])
+            except socket.error as e:
+                raise RosAPIFatalError(str(e))
             if sent == 0:
                 raise RosAPIFatalError('Connection closed by remote end.')
             sent_overal += sent
@@ -155,7 +158,10 @@ class RosAPI(object):
     def read_string(self, length):
         received_overal = ''
         while len(received_overal) < length:
-            received = self.socket.recv(length - len(received_overal))
+            try:
+                received = self.socket.recv(length - len(received_overal))
+            except socket.error as e:
+                raise RosAPIFatalError(str(e))
             if received == 0:
                 raise RosAPIFatalError('Connection closed by remote end.')
             received_overal += received
@@ -224,7 +230,10 @@ class RouterboardAPI(object):
     def __init__(self, host, username='api', password=''):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(30.0)
-        sock.connect((host, self.port))
+        try:
+            sock.connect((host, self.port))
+        except socket.error as e:
+            raise RosAPIFatalError(str(e))
         socket_utils.set_keepalive(sock, after_idle_sec=10)
 
         self.api_client = RosAPI(sock)
