@@ -1,8 +1,9 @@
 import binascii
 import hashlib
-
 import logging
+import socket
 
+import socket_utils
 
 logger = logging.getLogger(__name__)
 
@@ -159,3 +160,78 @@ class RosAPI(object):
                 raise RosAPIFatalError('Connection closed by remote end.')
             received_overal += received
         return received_overal
+
+
+class RouterboardResource(object):
+    def __init__(self, api_client, namespace):
+        self.api_client = api_client
+        self.namespace = namespace
+
+    def call(self, command, is_query, **kwargs):
+        command_arguments = self._prepare_arguments(is_query, **kwargs)
+        response = self.api_client.talk(
+            ['%s/%s' % (self.namespace, command)] + command_arguments)
+
+        output = []
+        for response_type, attributes in response:
+            if response_type == '!re':
+                output.append(self._remove_first_char_from_keys(attributes))
+
+        return output
+
+    @staticmethod
+    def _prepare_arguments(is_query, **kwargs):
+        command_arguments = []
+        for key, value in kwargs.iteritems():
+            if key in ['id', 'proplist']:
+                key = '.%s' % key
+            key = key.replace('_', '-')
+            selector_char = '?' if is_query else '='
+            command_arguments.append(
+                '%s%s=%s' % (selector_char, key, value))
+
+        return command_arguments
+
+    @staticmethod
+    def _remove_first_char_from_keys(dictionary):
+        elements = []
+        for key, value in dictionary.iteritems():
+            if key in ['=.id', '=.proplist']:
+                key = key[1:]
+            elements.append((key[1:], value))
+        return dict(elements)
+
+    def get(self, **kwargs):
+        return self.call('print', True, **kwargs)
+
+    def detailed_get(self, **kwargs):
+        kwargs['details'] = kwargs.pop('details', '')
+        return self.call('print', False, **kwargs)
+
+    def set(self, **kwargs):
+        return self.call('set', False, **kwargs)
+
+    def add(self, **kwargs):
+        return self.call('add', False, **kwargs)
+
+    def remove(self, **kwargs):
+        return self.call('remove', False, **kwargs)
+
+
+class RouterboardAPI(object):
+    port = 8728
+
+    def __init__(self, host, username='api', password=''):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(30.0)
+        sock.connect((host, self.port))
+        socket_utils.set_keepalive(sock, after_idle_sec=10)
+
+        self.api_client = RosAPI(sock)
+        self.api_client.login(username, password)
+
+    def get_resource(self, namespace):
+        return RouterboardResource(self.api_client, namespace)
+
+    def close_connection(self):
+        self.api_client.socket.close()
