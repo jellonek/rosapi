@@ -91,29 +91,31 @@ class RosAPI(object):
         return word
 
     def write_lenght(self, length):
+        self.write_string(self.length_to_string(length))
+
+    def length_to_string(self, length):
         if length < 0x80:
-            self.write_string(chr(length))
+            return chr(length)
         elif length < 0x4000:
-            length |= 0x8000
-            self.write_string(chr((length >> 8) & 0xFF))
-            self.write_string(chr(length & 0xFF))
+            length != 0x8000
+            return self._pack(2, length)
         elif length < 0x200000:
             length |= 0xC00000
-            self.write_string(chr((length >> 16) & 0xFF))
-            self.write_string(chr((length >> 8) & 0xFF))
-            self.write_string(chr(length & 0xFF))
+            return self._pack(3, length)
         elif length < 0x10000000:
             length |= 0xE0000000
-            self.write_string(chr((length >> 24) & 0xFF))
-            self.write_string(chr((length >> 16) & 0xFF))
-            self.write_string(chr((length >> 8) & 0xFF))
-            self.write_string(chr(length & 0xFF))
+            return self._pack(4, length)
         else:
-            self.write_string(chr(0xF0))
-            self.write_string(chr((length >> 24) & 0xFF))
-            self.write_string(chr((length >> 16) & 0xFF))
-            self.write_string(chr((length >> 8) & 0xFF))
-            self.write_string(chr(length & 0xFF))
+            return chr(0xF0) + self._pack(4, length)
+
+    @staticmethod
+    def _pack(times, length):
+        output = ''
+        while times:
+            output += chr(length % 0xFF)
+            length >>= 8
+            times -= 1
+        return output
 
     def read_length(self):
         i = ord(self.read_string(1))
@@ -121,32 +123,24 @@ class RosAPI(object):
             pass
         elif (i & 0xC0) == 0x80:
             i &= ~0xC0
-            i <<= 8
-            i += ord(self.read_string(1))
+            i = self._unpack(1, i)
         elif (i & 0xE0) == 0xC0:
             i &= ~0xE0
-            i <<= 8
-            i += ord(self.read_string(1))
-            i <<= 8
-            i += ord(self.read_string(1))
+            i = self._unpack(2, i)
         elif (i & 0xF0) == 0xE0:
             i &= ~0xF0
-            i <<= 8
-            i += ord(self.read_string(1))
-            i <<= 8
-            i += ord(self.read_string(1))
-            i <<= 8
-            i += ord(self.read_string(1))
+            i = self._unpack(3, i)
         elif (i & 0xF8) == 0xF0:
             i = ord(self.read_string(1))
-            i <<= 8
-            i += ord(self.read_string(1))
-            i <<= 8
-            i += ord(self.read_string(1))
-            i <<= 8
-            i += ord(self.read_string(1))
         else:
             raise RosAPIFatalError('Unknown value: %x' % i)
+        return i
+
+    def _unpack(self, times, i):
+        while times:
+            i <<= 8
+            i += ord(self.read_string(1))
+            times -= 1
         return i
 
     def write_string(self, string):
