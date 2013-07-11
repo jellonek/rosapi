@@ -13,6 +13,7 @@ setup(
     version=VERSION,
     description='Routerboard API',
     long_description=README,
+    url='https://github.com/jellonek/rosapi',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Topic :: Software Development :: Libraries',
