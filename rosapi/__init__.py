@@ -1,11 +1,12 @@
-#!/usr/bin/python
+import binascii
+import md5
 
-import sys, posix, time, md5, binascii, socket, select
 
-class ApiRos:
-    "Routeros api"
-    def __init__(self, sk):
-        self.sk = sk
+class ApiRos(object):
+    """Routeros api"""
+
+    def __init__(self, socket):
+        self.socket = socket
         self.currenttag = 0
         
     def login(self, username, pwd):
@@ -120,44 +121,14 @@ class ApiRos:
     def writeStr(self, str):        
         n = 0;                      
         while n < len(str):         
-            r = self.sk.send(str[n:])
+            r = self.socket.send(str[n:])
             if r == 0: raise RuntimeError, "connection closed by remote end"
             n += r                  
 
     def readStr(self, length):      
         ret = ''                    
         while len(ret) < length:    
-            s = self.sk.recv(length - len(ret))
+            s = self.socket.recv(length - len(ret))
             if s == '': raise RuntimeError, "connection closed by remote end"
             ret += s
         return ret
-
-def main():
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect((sys.argv[1], 8728))  
-    apiros = ApiRos(s);             
-    apiros.login(sys.argv[2], sys.argv[3]);
-
-    inputsentence = []
-
-    while 1:
-        r = select.select([s, sys.stdin], [], [], None)
-        if s in r[0]:
-            # something to read in socket, read sentence
-            x = apiros.readSentence()
-
-        if sys.stdin in r[0]:
-            # read line from input and strip off newline
-            l = sys.stdin.readline()
-            l = l[:-1]
-
-            # if empty line, send sentence and start with new
-            # otherwise append to input sentence
-            if l == '':
-                apiros.writeSentence(inputsentence)
-                inputsentence = []
-            else:
-                inputsentence.append(l)
-
-if __name__ == '__main__':
-    main()
