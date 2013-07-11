@@ -1,134 +1,167 @@
 import binascii
-import md5
+import hashlib
+
+import logging
 
 
-class ApiRos(object):
+logger = logging.getLogger(__name__)
+
+
+class RosAPIError(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        if isinstance(self.value, dict) and self.value.get('message'):
+            return self.value['message']
+        else:
+            return self.value
+
+
+class RosAPIFatalError(RosAPIError):
+    pass
+
+
+class RosAPI(object):
     """Routeros api"""
 
     def __init__(self, socket):
         self.socket = socket
-        self.currenttag = 0
-        
+
     def login(self, username, pwd):
-        for repl, attrs in self.talk(["/login"]):
-            chal = binascii.unhexlify(attrs['=ret'])
-        md = md5.new()
-        md.update('\x00')
-        md.update(pwd)
-        md.update(chal)
-        self.talk(["/login", "=name=" + username,
-                   "=response=00" + binascii.hexlify(md.digest())])
+        for _, attrs in self.talk(['/login']):
+            token = binascii.unhexlify(attrs['ret'])
+        hasher = hashlib.md5()
+        hasher.update('\x00')
+        hasher.update(pwd)
+        hasher.update(token)
+        self.talk(['/login', '=name=' + username,
+                   '=response=00' + hasher.hexdigest()])
 
     def talk(self, words):
-        if self.writeSentence(words) == 0: return
-        r = []
-        while 1:
-            i = self.readSentence();
-            if len(i) == 0: continue
-            reply = i[0]
+        if self.write_sentence(words) == 0:
+            return
+        output = []
+        while True:
+            input_sentence = self.read_sentence()
+            if not len(input_sentence):
+                continue
             attrs = {}
-            for w in i[1:]:
-                j = w.find('=', 1)
-                if (j == -1):
-                    attrs[w] = ''
+            reply = input_sentence.pop(0)
+            for line in input_sentence:
+                try:
+                    second_eq_pos = line.index('=', 1)
+                except IndexError:
+                    attrs[line[1:]] = ''
                 else:
-                    attrs[w[:j]] = w[j+1:]
-            r.append((reply, attrs))
-            if reply == '!done': return r
+                    attrs[line[1:second_eq_pos]] = line[second_eq_pos + 1:]
+            output.append((reply, attrs))
+            if reply == '!done':
+                if output[0][0] == '!trap':
+                    raise RosAPIError(output[0][1])
+                if output[0][0] == '!fatal':
+                    self.socket.close()
+                    raise RosAPIFatalError(output[0][1])
+                return output
 
-    def writeSentence(self, words):
-        ret = 0
-        for w in words:
-            self.writeWord(w)
-            ret += 1
-        self.writeWord('')
-        return ret
+    def write_sentence(self, words):
+        words_written = 0
+        for word in words:
+            self.write_word(word)
+            words_written += 1
+        self.write_word('')
+        return words_written
 
-    def readSentence(self):
-        r = []
-        while 1:
-            w = self.readWord()
-            if w == '': return r
-            r.append(w)
-            
-    def writeWord(self, w):
-        print "<<< " + w
-        self.writeLen(len(w))
-        self.writeStr(w)
+    def read_sentence(self):
+        sentence = []
+        while True:
+            word = self.read_word()
+            if not len(word):
+                return sentence
+            sentence.append(word)
 
-    def readWord(self):
-        ret = self.readStr(self.readLen())
-        print ">>> " + ret
-        return ret
+    def write_word(self, word):
+        self.write_lenght(len(word))
+        self.write_string(word)
+        logger.debug('>>> %s' % word)
 
-    def writeLen(self, l):
-        if l < 0x80:
-            self.writeStr(chr(l))
-        elif l < 0x4000:
-            l |= 0x8000
-            self.writeStr(chr((l >> 8) & 0xFF))
-            self.writeStr(chr(l & 0xFF))
-        elif l < 0x200000:
-            l |= 0xC00000
-            self.writeStr(chr((l >> 16) & 0xFF))
-            self.writeStr(chr((l >> 8) & 0xFF))
-            self.writeStr(chr(l & 0xFF))
-        elif l < 0x10000000:        
-            l |= 0xE0000000         
-            self.writeStr(chr((l >> 24) & 0xFF))
-            self.writeStr(chr((l >> 16) & 0xFF))
-            self.writeStr(chr((l >> 8) & 0xFF))
-            self.writeStr(chr(l & 0xFF))
-        else:                       
-            self.writeStr(chr(0xF0))
-            self.writeStr(chr((l >> 24) & 0xFF))
-            self.writeStr(chr((l >> 16) & 0xFF))
-            self.writeStr(chr((l >> 8) & 0xFF))
-            self.writeStr(chr(l & 0xFF))
+    def read_word(self):
+        word = self.read_string(self.read_length())
+        logger.debug('>>> %s' % word)
+        return word
 
-    def readLen(self):              
-        c = ord(self.readStr(1))    
-        if (c & 0x80) == 0x00:      
-            pass                    
-        elif (c & 0xC0) == 0x80:    
-            c &= ~0xC0              
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-        elif (c & 0xE0) == 0xC0:    
-            c &= ~0xE0              
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-        elif (c & 0xF0) == 0xE0:    
-            c &= ~0xF0              
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-        elif (c & 0xF8) == 0xF0:    
-            c = ord(self.readStr(1))     
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-            c <<= 8                 
-            c += ord(self.readStr(1))    
-        return c                    
+    def write_lenght(self, length):
+        if length < 0x80:
+            self.write_string(chr(length))
+        elif length < 0x4000:
+            length |= 0x8000
+            self.write_string(chr((length >> 8) & 0xFF))
+            self.write_string(chr(length & 0xFF))
+        elif length < 0x200000:
+            length |= 0xC00000
+            self.write_string(chr((length >> 16) & 0xFF))
+            self.write_string(chr((length >> 8) & 0xFF))
+            self.write_string(chr(length & 0xFF))
+        elif length < 0x10000000:
+            length |= 0xE0000000
+            self.write_string(chr((length >> 24) & 0xFF))
+            self.write_string(chr((length >> 16) & 0xFF))
+            self.write_string(chr((length >> 8) & 0xFF))
+            self.write_string(chr(length & 0xFF))
+        else:
+            self.write_string(chr(0xF0))
+            self.write_string(chr((length >> 24) & 0xFF))
+            self.write_string(chr((length >> 16) & 0xFF))
+            self.write_string(chr((length >> 8) & 0xFF))
+            self.write_string(chr(length & 0xFF))
 
-    def writeStr(self, str):        
-        n = 0;                      
-        while n < len(str):         
-            r = self.socket.send(str[n:])
-            if r == 0: raise RuntimeError, "connection closed by remote end"
-            n += r                  
+    def read_length(self):
+        i = ord(self.read_string(1))
+        if (i & 0x80) == 0x00:
+            pass
+        elif (i & 0xC0) == 0x80:
+            i &= ~0xC0
+            i <<= 8
+            i += ord(self.read_string(1))
+        elif (i & 0xE0) == 0xC0:
+            i &= ~0xE0
+            i <<= 8
+            i += ord(self.read_string(1))
+            i <<= 8
+            i += ord(self.read_string(1))
+        elif (i & 0xF0) == 0xE0:
+            i &= ~0xF0
+            i <<= 8
+            i += ord(self.read_string(1))
+            i <<= 8
+            i += ord(self.read_string(1))
+            i <<= 8
+            i += ord(self.read_string(1))
+        elif (i & 0xF8) == 0xF0:
+            i = ord(self.read_string(1))
+            i <<= 8
+            i += ord(self.read_string(1))
+            i <<= 8
+            i += ord(self.read_string(1))
+            i <<= 8
+            i += ord(self.read_string(1))
+        else:
+            raise RosAPIFatalError('Unknown value: %x' % i)
+        return i
 
-    def readStr(self, length):      
-        ret = ''                    
-        while len(ret) < length:    
-            s = self.socket.recv(length - len(ret))
-            if s == '': raise RuntimeError, "connection closed by remote end"
-            ret += s
-        return ret
+    def write_string(self, string):
+        sent_overal = 0
+        while sent_overal < len(string):
+            sent = self.socket.send(string[sent_overal:])
+            if sent == 0:
+                raise RosAPIFatalError('Connection closed by remote end.')
+            sent_overal += sent
+
+    def read_string(self, length):
+        received_overal = ''
+        while len(received_overal) < length:
+            received = self.socket.recv(length - len(received_overal))
+            if received == 0:
+                raise RosAPIFatalError('Connection closed by remote end.')
+            received_overal += received
+        return received_overal
