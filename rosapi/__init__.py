@@ -204,7 +204,7 @@ class RouterboardResource(object):
         for key, value in dictionary.iteritems():
             if key in ['=.id', '=.proplist']:
                 key = key[1:]
-            elements.append((key[1:], value))
+            elements.append((key, value))
         return dict(elements)
 
     def get(self, **kwargs):
