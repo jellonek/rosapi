@@ -202,7 +202,7 @@ class RouterboardResource(object):
     def _remove_first_char_from_keys(dictionary):
         elements = []
         for key, value in dictionary.iteritems():
-            if key in ['=.id', '=.proplist']:
+            if key in ['.id', '.proplist']:
                 key = key[1:]
             elements.append((key, value))
         return dict(elements)
