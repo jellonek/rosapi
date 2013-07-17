@@ -211,7 +211,7 @@ class RouterboardResource(object):
         return self.call('print', True, **kwargs)
 
     def detailed_get(self, **kwargs):
-        kwargs['details'] = kwargs.pop('details', '')
+        kwargs['detail'] = kwargs.pop('detail', '')
         return self.call('print', False, **kwargs)
 
     def set(self, **kwargs):
