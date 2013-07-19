@@ -82,9 +82,9 @@ class RosAPI(object):
             sentence.append(word)
 
     def write_word(self, word):
+        logger.debug('>>> %s' % word)
         self.write_lenght(len(word))
         self.write_string(word)
-        logger.debug('>>> %s' % word)
 
     def read_word(self):
         word = self.read_string(self.read_length())
@@ -113,7 +113,7 @@ class RosAPI(object):
     def _pack(times, length):
         output = ''
         while times:
-            output += chr(length % 0xFF)
+            output = chr(length % 0xFF) + output
             length >>= 8
             times -= 1
         return output
