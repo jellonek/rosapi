@@ -98,7 +98,7 @@ class RosAPI(object):
         if length < 0x80:
             return chr(length)
         elif length < 0x4000:
-            length != 0x8000
+            length |= 0x8000
             return self._pack(2, length)
         elif length < 0x200000:
             length |= 0xC00000
@@ -113,9 +113,9 @@ class RosAPI(object):
     def _pack(times, length):
         output = ''
         while times:
-            output = chr(length % 0xFF) + output
-            length >>= 8
+            output = chr(length & 0xFF) + output
             times -= 1
+            length >>= 8
         return output
 
     def read_length(self):
