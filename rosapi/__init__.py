@@ -162,7 +162,7 @@ class RosAPI(object):
                 received = self.socket.recv(length - len(received_overal))
             except socket.error as e:
                 raise RosAPIFatalError(str(e))
-            if received == 0:
+            if len(received) == 0:
                 raise RosAPIFatalError('Connection closed by remote end.')
             received_overal += received
         return received_overal
