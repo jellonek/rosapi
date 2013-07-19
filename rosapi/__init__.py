@@ -88,7 +88,7 @@ class RosAPI(object):
 
     def read_word(self):
         word = self.read_string(self.read_length())
-        logger.debug('>>> %s' % word)
+        logger.debug('<<< %s' % word)
         return word
 
     def write_lenght(self, length):
