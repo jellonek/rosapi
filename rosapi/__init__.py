@@ -19,6 +19,10 @@ class RosAPIError(Exception):
             return self.value
 
 
+class RosAPIConnectionError(RosAPIError):
+    pass
+
+
 class RosAPIFatalError(RosAPIError):
     pass
 
@@ -150,9 +154,9 @@ class RosAPI(object):
             try:
                 sent = self.socket.send(string[sent_overal:])
             except socket.error as e:
-                raise RosAPIFatalError(str(e))
+                raise RosAPIConnectionError(str(e))
             if sent == 0:
-                raise RosAPIFatalError('Connection closed by remote end.')
+                raise RosAPIConnectionError('Connection closed by remote end.')
             sent_overal += sent
 
     def read_string(self, length):
@@ -161,9 +165,9 @@ class RosAPI(object):
             try:
                 received = self.socket.recv(length - len(received_overal))
             except socket.error as e:
-                raise RosAPIFatalError(str(e))
+                raise RosAPIConnectionError(str(e))
             if len(received) == 0:
-                raise RosAPIFatalError('Connection closed by remote end.')
+                raise RosAPIConnectionError('Connection closed by remote end.')
             received_overal += received
         return received_overal
 
@@ -233,7 +237,7 @@ class RouterboardAPI(object):
         try:
             sock.connect((host, self.port))
         except socket.error as e:
-            raise RosAPIFatalError(str(e))
+            raise RosAPIConnectionError(str(e))
         socket_utils.set_keepalive(sock, after_idle_sec=10)
 
         self.api_client = RosAPI(sock)
