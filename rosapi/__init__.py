@@ -18,8 +18,14 @@ class RosAPIError(Exception):
     def __str__(self):
         if isinstance(self.value, dict) and self.value.get('message'):
             return self.value['message']
+        elif isinstance(self.value, list):
+            elements = (
+                '%s: %s' %
+                (element.__class__, str(element)) for element in self.value
+            )
+            return '[%s]' % (', '.join(element for element in elements))
         else:
-            return self.value
+            return str(self.value)
 
 
 class RosAPIConnectionError(RosAPIError):
