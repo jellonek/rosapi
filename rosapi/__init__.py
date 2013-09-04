@@ -3,7 +3,10 @@ import hashlib
 import logging
 import socket
 
+from retryloop import RetryError
+from retryloop import retryloop
 import socket_utils
+
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,10 @@ class RosAPIError(Exception):
 
 
 class RosAPIConnectionError(RosAPIError):
+    pass
+
+
+class RosAPIMultipleError(RosAPIError):
     pass
 
 
@@ -173,14 +180,25 @@ class RosAPI(object):
 
 
 class RouterboardResource(object):
-    def __init__(self, api_client, namespace):
-        self.api_client = api_client
+    def __init__(self, api, namespace):
+        self.api = api
         self.namespace = namespace
 
     def call(self, command, is_query, **kwargs):
         command_arguments = self._prepare_arguments(is_query, **kwargs)
-        response = self.api_client.talk(
-            ['%s/%s' % (self.namespace, command)] + command_arguments)
+        errors = []
+        try:
+            for retry in retryloop(10, timeout=30):
+                try:
+                    response = self.api.api_client.talk(
+                        ['%s/%s' % (self.namespace, command)] +
+                        command_arguments)
+                except RosAPIConnectionError as e:
+                    errors.append(e)
+                    self.api.reconnect()
+                    retry()
+        except RetryError:
+            raise RosAPIMultipleError(errors)
 
         output = []
         for response_type, attributes in response:
@@ -232,19 +250,42 @@ class RouterboardAPI(object):
     port = 8728
 
     def __init__(self, host, username='api', password=''):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(30.0)
-        try:
-            sock.connect((host, self.port))
-        except socket.error as e:
-            raise RosAPIConnectionError(str(e))
-        socket_utils.set_keepalive(sock, after_idle_sec=10)
+        self.host = host
+        self.username = username
+        self.password = password
+        self.socket = None
+        self.reconnect()
 
+    def reconnect(self):
+        if self.socket:
+            self.close_connection()
+        errors = []
+        try:
+            for retry in retryloop(10, timeout=30):
+                try:
+                    self.connect()
+                    self.login()
+                except socket.error as e:
+                    errors.append(RosAPIConnectionError(str(e)))
+                    retry()
+                except RosAPIConnectionError as e:
+                    errors.append(e)
+        except RetryError:
+            raise RosAPIMultipleError(errors)
+
+    def connect(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(15.0)
+        sock.connect((self.host, self.port))
+        socket_utils.set_keepalive(sock, after_idle_sec=10)
+        self.socket = socket
         self.api_client = RosAPI(sock)
-        self.api_client.login(username, password)
+
+    def login(self):
+        self.api_client.login(self.username, self.password)
 
     def get_resource(self, namespace):
-        return RouterboardResource(self.api_client, namespace)
+        return RouterboardResource(self, namespace)
 
     def close_connection(self):
-        self.api_client.socket.close()
+        self.socket.close()
