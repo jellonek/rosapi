@@ -9,7 +9,7 @@ class RetryError(Exception):
 def retryloop(attempts, timeout):
     starttime = time.time()
     success = set()
-    for i in range(attempts): 
+    for i in range(attempts):
         success.add(True)
         yield success.clear
         if success:
