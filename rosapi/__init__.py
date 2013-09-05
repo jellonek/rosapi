@@ -192,19 +192,9 @@ class RouterboardResource(object):
 
     def call(self, command, is_query, **kwargs):
         command_arguments = self._prepare_arguments(is_query, **kwargs)
-        errors = []
-        try:
-            for retry in retryloop(10, timeout=30):
-                try:
-                    response = self.api.api_client.talk(
-                        ['%s/%s' % (self.namespace, command)] +
-                        command_arguments)
-                except RosAPIConnectionError as e:
-                    errors.append(e)
-                    self.api.reconnect()
-                    retry()
-        except RetryError:
-            raise RosAPIMultipleError(errors)
+        response = self.api.api_client.talk(
+            ['%s/%s' % (self.namespace, command)] +
+            command_arguments)
 
         output = []
         for response_type, attributes in response:
