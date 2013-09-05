@@ -32,10 +32,6 @@ class RosAPIConnectionError(RosAPIError):
     pass
 
 
-class RosAPIMultipleError(RosAPIError):
-    pass
-
-
 class RosAPIFatalError(RosAPIError):
     pass
 
@@ -255,19 +251,15 @@ class RouterboardAPI(object):
     def reconnect(self):
         if self.socket:
             self.close_connection()
-        errors = []
         try:
             for retry in retryloop(10, timeout=30):
                 try:
                     self.connect()
                     self.login()
-                except socket.error as e:
-                    errors.append(RosAPIConnectionError(str(e)))
+                except socket.error:
                     retry()
-                except RosAPIConnectionError as e:
-                    errors.append(e)
-        except RetryError:
-            raise RosAPIMultipleError(errors)
+        except (socket.error, RetryError) as e:
+            raise RosAPIConnectionError(str(e))
 
     def connect(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
