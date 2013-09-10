@@ -266,7 +266,7 @@ class RouterboardAPI(object):
         sock.settimeout(15.0)
         sock.connect((self.host, self.port))
         socket_utils.set_keepalive(sock, after_idle_sec=10)
-        self.socket = socket
+        self.socket = sock
         self.api_client = RosAPI(sock)
 
     def login(self):
