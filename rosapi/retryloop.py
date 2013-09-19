@@ -31,6 +31,6 @@ def retryloop(attempts, timeout=None, delay=0, backoff=1):
 
     # Decorate exception with retry information:
     e.args = e.args + ("on attempt {0} of {1} after {2:.3f} seconds".format(
-        i + 1, attempts + 1, duration), )
+        i + 1, attempts, duration), )
 
     raise
