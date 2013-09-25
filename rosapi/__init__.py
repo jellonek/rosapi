@@ -248,6 +248,12 @@ class RouterboardAPI(object):
         self.socket = None
         self.reconnect()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, _, __, ___):
+        self.close_connection()
+
     def reconnect(self):
         if self.socket:
             self.close_connection()
