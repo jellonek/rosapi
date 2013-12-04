@@ -20,7 +20,7 @@ def retryloop(attempts, timeout=None, delay=0, backoff=1):
             break
         if delay:
             time.sleep(delay)
-            delay = delay * backoff
+            delay *= backoff
 
     e = sys.exc_info()[1]
 
