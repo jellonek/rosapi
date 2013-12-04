@@ -239,13 +239,12 @@ class RouterboardResource(object):
 
 
 class RouterboardAPI(object):
-    port = 8728
-
-    def __init__(self, host, username='api', password=''):
+    def __init__(self, host, username='api', password='', port=8728):
         self.host = host
         self.username = username
         self.password = password
         self.socket = None
+        self.port = port
         self.reconnect()
 
     def __enter__(self):
