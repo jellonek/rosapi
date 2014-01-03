@@ -3,9 +3,9 @@ import hashlib
 import logging
 import socket
 
-from retryloop import RetryError
-from retryloop import retryloop
-import socket_utils
+from .retryloop import RetryError
+from .retryloop import retryloop
+from .socket_utils import set_keepalive
 
 
 logger = logging.getLogger(__name__)
@@ -270,7 +270,7 @@ class RouterboardAPI(object):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(15.0)
         sock.connect((self.host, self.port))
-        socket_utils.set_keepalive(sock, after_idle_sec=10)
+        set_keepalive(sock, after_idle_sec=10)
         self.socket = sock
         self.api_client = RosAPI(sock)
 
