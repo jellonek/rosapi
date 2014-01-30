@@ -46,8 +46,8 @@ class RosAPI(object):
         for _, attrs in self.talk(['/login']):
             token = binascii.unhexlify(attrs['ret'])
         hasher = hashlib.md5()
-        hasher.update('\x00')
-        hasher.update(pwd)
+        hasher.update(b'\x00')
+        hasher.update(pwd.encode('utf-8'))
         hasher.update(token)
         self.talk(['/login', '=name=' + username,
                    '=response=00' + hasher.hexdigest()])
@@ -161,7 +161,7 @@ class RosAPI(object):
         sent_overal = 0
         while sent_overal < len(string):
             try:
-                sent = self.socket.send(string[sent_overal:])
+                sent = self.socket.send(string[sent_overal:].encode('utf-8'))
             except socket.error as e:
                 raise RosAPIConnectionError(str(e))
             if sent == 0:
@@ -172,7 +172,8 @@ class RosAPI(object):
         received_overal = ''
         while len(received_overal) < length:
             try:
-                received = self.socket.recv(length - len(received_overal))
+                received = self.socket.recv(
+                    length - len(received_overal)).decode('utf-8')
             except socket.error as e:
                 raise RosAPIConnectionError(str(e))
             if len(received) == 0:
@@ -202,7 +203,7 @@ class RouterboardResource(object):
     @staticmethod
     def _prepare_arguments(is_query, **kwargs):
         command_arguments = []
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             if key in ['id', 'proplist']:
                 key = '.%s' % key
             key = key.replace('_', '-')
@@ -215,7 +216,7 @@ class RouterboardResource(object):
     @staticmethod
     def _remove_first_char_from_keys(dictionary):
         elements = []
-        for key, value in dictionary.iteritems():
+        for key, value in dictionary.tems():
             if key in ['.id', '.proplist']:
                 key = key[1:]
             elements.append((key, value))
