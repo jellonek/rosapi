@@ -172,15 +172,16 @@ class RouterboardResource(object):
         self.api = api
         self.namespace = namespace
 
-    def call(self, command, is_query, **kwargs):
-        command_arguments = self._prepare_arguments(is_query, **kwargs)
-        response = self.api.api_client.talk(
-            ['%s/%s' % (self.namespace, command)] +
-            command_arguments)
+    def call(self, command, query_kwargs, set_kwargs):
+        query_arguments = self._prepare_arguments(True, **query_kwargs)
+        set_arguments = self._prepare_arguments(False, **set_kwargs)
+        query = ([('%s/%s' % (self.namespace, command)).encode('ascii')] +
+            query_arguments + set_arguments)
+        response = self.api.api_client.talk(query)
 
         output = []
         for response_type, attributes in response:
-            if response_type == '!re':
+            if response_type == b'!re':
                 output.append(self._remove_first_char_from_keys(attributes))
 
         return output
@@ -194,7 +195,7 @@ class RouterboardResource(object):
             key = key.replace('_', '-')
             selector_char = '?' if is_query else '='
             command_arguments.append(
-                '%s%s=%s' % (selector_char, key, value))
+                ('%s%s=' % (selector_char, key)).encode('ascii') + value)
 
         return command_arguments
 
@@ -202,26 +203,26 @@ class RouterboardResource(object):
     def _remove_first_char_from_keys(dictionary):
         elements = []
         for key, value in dictionary.items():
+            key = key.decode('ascii')
             if key in ['.id', '.proplist']:
                 key = key[1:]
             elements.append((key, value))
         return dict(elements)
 
     def get(self, **kwargs):
-        return self.call('print', True, **kwargs)
+        return self.call('print', kwargs, {})
 
     def detailed_get(self, **kwargs):
-        kwargs['detail'] = kwargs.pop('detail', '')
-        return self.call('print', False, **kwargs)
+        return self.call('print', kwargs, {'detail':b''})
 
     def set(self, **kwargs):
-        return self.call('set', False, **kwargs)
+        return self.call('set', {}, kwargs)
 
     def add(self, **kwargs):
-        return self.call('add', False, **kwargs)
+        return self.call('add', {}. kwargs)
 
     def remove(self, **kwargs):
-        return self.call('remove', False, **kwargs)
+        return self.call('remove', {}, kwargs)
 
 
 class RouterboardAPI(object):

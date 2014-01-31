@@ -56,10 +56,65 @@ class RosapiTest(object):
 
     def assert_wifi_enabled(self):
         assert self.get_wlan1()[b'disabled'] == b'false'
-        
 
     def assert_wifi_disabled(self):
         assert self.get_wlan1()[b'disabled'] == b'true'
+
+
+class RouterboardAPITest(object):
+    def __init__(self, api):
+        self.api = api
+
+    def test(self):
+        self.assert_file_exists()
+        self.put_file(0x40)
+        assert self.get_file_contents(0x40) == self.fetch_file()
+        self.put_file(0x1ff)
+        assert self.get_file_contents(0x1ff) == self.fetch_file()
+        self.get_wlan1()
+        self.enable_wifi()
+        self.assert_wifi_enabled()
+        self.disable_wifi()
+        self.assert_wifi_disabled()
+
+    def get_wlan1(self):
+        resource = self.api.get_resource('/interface/wireless')
+        response = resource.get(name=b'wlan1')
+        assert 1 == len(response)
+        return response[0]
+
+    def enable_wifi(self):
+        resource = self.api.get_resource('/interface/wireless')
+        resource.set(disabled=b'false', id=self.get_wlan1()['id'])
+
+    def disable_wifi(self):
+        resource = self.api.get_resource('/interface/wireless')
+        resource.set(disabled=b'true', id=self.get_wlan1()['id'])
+
+    def assert_wifi_enabled(self):
+        assert self.get_wlan1()['disabled'] == b'false'
+
+    def assert_wifi_disabled(self):
+        assert self.get_wlan1()['disabled'] == b'true'
+
+    def assert_file_exists(self):
+        response = self.api.get_resource('/file').get(name=b'testfile.rsc')
+        assert len(response) == 1
+
+    def put_file(self, length):
+        response = self.api.get_resource('/file').get(name=b'testfile.rsc')
+        id = response[0]['id']
+        self.api.get_resource('/file').set(id=id, contents=self.get_file_contents(length))
+
+    def fetch_file(self):
+        response = self.api.get_resource('/file').get(name=b'testfile.rsc')
+        id = response[0]['id']
+        response = self.api.get_resource('/file').detailed_get(id=id)
+        return response[0]['contents']
+
+    def get_file_contents(self, length):
+        return bytes(b % 256 for b in range(length))
+
 
 if __name__ == '__main__':
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -71,3 +126,5 @@ if __name__ == '__main__':
     api.login(b'api', b'') 
     RosapiTest(api).test()
     sock.close()
+    with rosapi.RouterboardAPI('10.9.0.14') as api:
+        RouterboardAPITest(api).test()
