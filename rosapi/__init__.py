@@ -112,50 +112,35 @@ class RosAPI(object):
             return length.to_bytes(1, 'big')
         elif length < 0x4000:
             length |= 0x8000
-            return self._pack(2, length)
+            return length.to_bytes(2, 'big')
         elif length < 0x200000:
             length |= 0xC00000
-            return self._pack(3, length)
+            return length.to_bytes(3, 'big')
         elif length < 0x10000000:
             length |= 0xE0000000
-            return self._pack(4, length)
+            return length.to_bytes(4, 'big')
         else:
-            return chr(0xF0) + self._pack(4, length)
-
-    @staticmethod
-    def _pack(times, length):
-        output = ''
-        while times:
-            output = chr(length & 0xFF) + output
-            times -= 1
-            length >>= 8
-        return output
+            return (0xF0).to_bytes(1, 'big') + length.to_bytes(4, 'big')
 
     def read_length(self):
-        i = ord(self.read_string(1))
+        b = self.read_string(1)
+        i = int.from_bytes(b, 'big')
         if (i & 0x80) == 0x00:
-            pass
+            return i
         elif (i & 0xC0) == 0x80:
-            i &= ~0xC0
-            i = self._unpack(1, i)
+            return self._unpack(1, i & ~0xC0)
         elif (i & 0xE0) == 0xC0:
-            i &= ~0xE0
-            i = self._unpack(2, i)
+            return self._unpack(2, i & ~0xE0)
         elif (i & 0xF0) == 0xE0:
-            i &= ~0xF0
-            i = self._unpack(3, i)
+            return self._unpack(3, i & ~0xF0)
         elif (i & 0xF8) == 0xF0:
-            i = ord(self.read_string(1))
+            return int.from_bytes(self.read_string(1), 'big')
         else:
             raise RosAPIFatalError('Unknown value: %x' % i)
-        return i
 
     def _unpack(self, times, i):
-        while times:
-            i <<= 8
-            i += ord(self.read_string(1))
-            times -= 1
-        return i
+        res = i.to_bytes(1, 'big') + self.read_string(times)
+        return int.from_bytes(res, 'big')
 
     def write_string(self, string):
         sent_overal = 0

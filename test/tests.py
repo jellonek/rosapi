@@ -12,8 +12,10 @@ class RosapiTest(object):
     def test(self):
         self.create_file()
         self.assert_file_exists()
-        self.put_file(80)
-        assert self.get_file_contents(80) == self.fetch_file()
+        self.put_file(0x40)
+        assert self.get_file_contents(0x40) == self.fetch_file()
+        self.put_file(0x1ff)
+        assert self.get_file_contents(0x1ff) == self.fetch_file()
         self.enable_wifi()
         self.assert_wifi_enabled()
         self.disable_wifi()
