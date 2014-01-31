@@ -261,7 +261,8 @@ class RouterboardAPI(object):
         self.api_client = RosAPI(sock)
 
     def login(self):
-        self.api_client.login(self.username, self.password)
+        self.api_client.login(self.username.encode('ascii'),
+                              self.password.encode('ascii'))
 
     def get_resource(self, namespace):
         return RouterboardResource(self, namespace)
