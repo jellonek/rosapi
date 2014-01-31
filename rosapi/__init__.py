@@ -44,10 +44,10 @@ class RosAPI(object):
 
     def login(self, username, pwd):
         for _, attrs in self.talk(['/login']):
-            token = binascii.unhexlify(attrs['ret'])
+            token = binascii.unhexlify(attrs[b'ret'])
         hasher = hashlib.md5()
         hasher.update(b'\x00')
-        hasher.update(pwd.encode('utf-8'))
+        hasher.update(pwd)
         hasher.update(token)
         self.talk(['/login', '=name=' + username,
                    '=response=00' + hasher.hexdigest()])
@@ -64,16 +64,16 @@ class RosAPI(object):
             reply = input_sentence.pop(0)
             for line in input_sentence:
                 try:
-                    second_eq_pos = line.index('=', 1)
+                    second_eq_pos = line.index(b'=', 1)
                 except IndexError:
                     attrs[line[1:]] = ''
                 else:
                     attrs[line[1:second_eq_pos]] = line[second_eq_pos + 1:]
             output.append((reply, attrs))
-            if reply == '!done':
-                if output[0][0] == '!trap':
+            if reply == b'!done':
+                if output[0][0] == b'!trap':
                     raise RosAPIError(output[0][1])
-                if output[0][0] == '!fatal':
+                if output[0][0] == b'!fatal':
                     self.socket.close()
                     raise RosAPIFatalError(output[0][1])
                 return output
@@ -169,11 +169,11 @@ class RosAPI(object):
             sent_overal += sent
 
     def read_string(self, length):
-        received_overal = ''
+        received_overal = b''
         while len(received_overal) < length:
             try:
                 received = self.socket.recv(
-                    length - len(received_overal)).decode('utf-8')
+                    length - len(received_overal))
             except socket.error as e:
                 raise RosAPIConnectionError(str(e))
             if len(received) == 0:
@@ -216,7 +216,7 @@ class RouterboardResource(object):
     @staticmethod
     def _remove_first_char_from_keys(dictionary):
         elements = []
-        for key, value in dictionary.tems():
+        for key, value in dictionary.items():
             if key in ['.id', '.proplist']:
                 key = key[1:]
             elements.append((key, value))
