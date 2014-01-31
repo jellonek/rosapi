@@ -43,14 +43,14 @@ class RosAPI(object):
         self.socket = socket
 
     def login(self, username, pwd):
-        for _, attrs in self.talk(['/login']):
+        for _, attrs in self.talk([b'/login']):
             token = binascii.unhexlify(attrs[b'ret'])
         hasher = hashlib.md5()
         hasher.update(b'\x00')
         hasher.update(pwd)
         hasher.update(token)
-        self.talk(['/login', '=name=' + username,
-                   '=response=00' + hasher.hexdigest()])
+        self.talk([b'/login', b'=name=' + username,
+                   b'=response=00' + hasher.hexdigest().encode('ascii')])
 
     def talk(self, words):
         if self.write_sentence(words) == 0:
@@ -109,7 +109,7 @@ class RosAPI(object):
 
     def length_to_string(self, length):
         if length < 0x80:
-            return chr(length)
+            return length.to_bytes(1, 'big')
         elif length < 0x4000:
             length |= 0x8000
             return self._pack(2, length)
@@ -161,7 +161,7 @@ class RosAPI(object):
         sent_overal = 0
         while sent_overal < len(string):
             try:
-                sent = self.socket.send(string[sent_overal:].encode('utf-8'))
+                sent = self.socket.send(string[sent_overal:])
             except socket.error as e:
                 raise RosAPIConnectionError(str(e))
             if sent == 0:
