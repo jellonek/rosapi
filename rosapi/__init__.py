@@ -167,7 +167,7 @@ class RosAPI(object):
         return received_overal
 
 
-class RouterboardResource(object):
+class BaseRouterboardResource(object):
     def __init__(self, api, namespace):
         self.api = api
         self.namespace = namespace
@@ -225,6 +225,32 @@ class RouterboardResource(object):
         return self.call('remove', {}, kwargs)
 
 
+class RouterboardResource(BaseRouterboardResource):
+    def _encode_kwargs(self, kwargs):
+        return dict((k, v.encode('ascii')) for k, v in kwargs.items())
+
+    def get(self, **kwargs):
+        return super(RouterboardResource, self).get(**self._encode_kwargs(kwargs)) 
+
+    def detailed_get(self, **kwargs):
+        return super(RouterboardResource, self).detailed_get(**self._encode_kwargs(kwargs)) 
+
+    def set(self, **kwargs):
+        return super(RouterboardResource, self).set(**self._encode_kwargs(kwargs)) 
+
+    def add(self, **kwargs):
+        return super(RouterboardResource, self).add(**self._encode_kwargs(kwargs)) 
+
+    def remove(self, **kwargs):
+        return super(RouterboardResource, self).remove(**self._encode_kwargs(kwargs)) 
+
+    def call(self, *args, **kwargs):
+        result = super(RouterboardResource, self).call(*args, **kwargs)
+        for item in result:
+            for k in item:
+                item[k] = item[k].decode('ascii')
+        return result
+
 class RouterboardAPI(object):
     def __init__(self, host, username='api', password='', port=8728):
         self.host = host
@@ -267,6 +293,9 @@ class RouterboardAPI(object):
 
     def get_resource(self, namespace):
         return RouterboardResource(self, namespace)
+
+    def get_base_resource(self, namespace):
+        return BaseRouterboardResource(self, namespace)
 
     def close_connection(self):
         self.socket.close()

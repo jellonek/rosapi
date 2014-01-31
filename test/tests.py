@@ -66,6 +66,38 @@ class RouterboardAPITest(object):
         self.api = api
 
     def test(self):
+        self.get_wlan1()
+        self.enable_wifi()
+        self.assert_wifi_enabled()
+        self.disable_wifi()
+        self.assert_wifi_disabled()
+
+    def get_wlan1(self):
+        resource = self.api.get_resource('/interface/wireless')
+        response = resource.get(name='wlan1')
+        assert 1 == len(response)
+        return response[0]
+
+    def enable_wifi(self):
+        resource = self.api.get_resource('/interface/wireless')
+        resource.set(disabled='false', id=self.get_wlan1()['id'])
+
+    def disable_wifi(self):
+        resource = self.api.get_resource('/interface/wireless')
+        resource.set(disabled='true', id=self.get_wlan1()['id'])
+
+    def assert_wifi_enabled(self):
+        assert self.get_wlan1()['disabled'] == 'false'
+
+    def assert_wifi_disabled(self):
+        assert self.get_wlan1()['disabled'] == 'true'
+
+
+class RouterboardAPIBaseResourceTest(object):
+    def __init__(self, api):
+        self.api = api
+
+    def test(self):
         self.assert_file_exists()
         self.put_file(0x40)
         assert self.get_file_contents(0x40) == self.fetch_file()
@@ -78,17 +110,17 @@ class RouterboardAPITest(object):
         self.assert_wifi_disabled()
 
     def get_wlan1(self):
-        resource = self.api.get_resource('/interface/wireless')
+        resource = self.api.get_base_resource('/interface/wireless')
         response = resource.get(name=b'wlan1')
         assert 1 == len(response)
         return response[0]
 
     def enable_wifi(self):
-        resource = self.api.get_resource('/interface/wireless')
+        resource = self.api.get_base_resource('/interface/wireless')
         resource.set(disabled=b'false', id=self.get_wlan1()['id'])
 
     def disable_wifi(self):
-        resource = self.api.get_resource('/interface/wireless')
+        resource = self.api.get_base_resource('/interface/wireless')
         resource.set(disabled=b'true', id=self.get_wlan1()['id'])
 
     def assert_wifi_enabled(self):
@@ -98,22 +130,23 @@ class RouterboardAPITest(object):
         assert self.get_wlan1()['disabled'] == b'true'
 
     def assert_file_exists(self):
-        response = self.api.get_resource('/file').get(name=b'testfile.rsc')
+        response = self.api.get_base_resource('/file').get(name=b'testfile.rsc')
         assert len(response) == 1
 
     def put_file(self, length):
-        response = self.api.get_resource('/file').get(name=b'testfile.rsc')
+        response = self.api.get_base_resource('/file').get(name=b'testfile.rsc')
         id = response[0]['id']
-        self.api.get_resource('/file').set(id=id, contents=self.get_file_contents(length))
+        self.api.get_base_resource('/file').set(id=id, contents=self.get_file_contents(length))
 
     def fetch_file(self):
-        response = self.api.get_resource('/file').get(name=b'testfile.rsc')
+        response = self.api.get_base_resource('/file').get(name=b'testfile.rsc')
         id = response[0]['id']
-        response = self.api.get_resource('/file').detailed_get(id=id)
+        response = self.api.get_base_resource('/file').detailed_get(id=id)
         return response[0]['contents']
 
     def get_file_contents(self, length):
         return bytes(b % 256 for b in range(length))
+
 
 
 if __name__ == '__main__':
@@ -128,3 +161,4 @@ if __name__ == '__main__':
     sock.close()
     with rosapi.RouterboardAPI('10.9.0.14') as api:
         RouterboardAPITest(api).test()
+        RouterboardAPIBaseResourceTest(api).test()
