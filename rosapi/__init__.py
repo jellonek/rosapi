@@ -194,7 +194,7 @@ class BaseRouterboardResource(object):
         query_arguments = self._prepare_arguments(True, **query_kwargs)
         set_arguments = self._prepare_arguments(False, **set_kwargs)
         query = ([('%s/%s' % (self.namespace, command)).encode('ascii')] +
-            query_arguments + set_arguments)
+                 query_arguments + set_arguments)
         response = self.api.api_client.talk(query)
 
         output = []
@@ -231,7 +231,7 @@ class BaseRouterboardResource(object):
         return self.call('print', kwargs, {})
 
     def detailed_get(self, **kwargs):
-        return self.call('print', kwargs, {'detail':b''})
+        return self.call('print', kwargs, {'detail': b''})
 
     def set(self, **kwargs):
         return self.call('set', {}, kwargs)
@@ -248,19 +248,24 @@ class RouterboardResource(BaseRouterboardResource):
         return dict((k, v.encode('ascii')) for k, v in kwargs.items())
 
     def get(self, **kwargs):
-        return super(RouterboardResource, self).get(**self._encode_kwargs(kwargs)) 
+        return super(RouterboardResource, self).get(
+            **self._encode_kwargs(kwargs))
 
     def detailed_get(self, **kwargs):
-        return super(RouterboardResource, self).detailed_get(**self._encode_kwargs(kwargs)) 
+        return super(RouterboardResource, self).detailed_get(
+            **self._encode_kwargs(kwargs))
 
     def set(self, **kwargs):
-        return super(RouterboardResource, self).set(**self._encode_kwargs(kwargs)) 
+        return super(RouterboardResource, self).set(
+            **self._encode_kwargs(kwargs))
 
     def add(self, **kwargs):
-        return super(RouterboardResource, self).add(**self._encode_kwargs(kwargs)) 
+        return super(RouterboardResource, self).add(
+            **self._encode_kwargs(kwargs))
 
     def remove(self, **kwargs):
-        return super(RouterboardResource, self).remove(**self._encode_kwargs(kwargs)) 
+        return super(RouterboardResource, self).remove(
+            **self._encode_kwargs(kwargs))
 
     def call(self, *args, **kwargs):
         result = super(RouterboardResource, self).call(*args, **kwargs)
@@ -268,6 +273,7 @@ class RouterboardResource(BaseRouterboardResource):
             for k in item:
                 item[k] = item[k].decode('ascii')
         return result
+
 
 class RouterboardAPI(object):
     def __init__(self, host, username='api', password='', port=8728):
