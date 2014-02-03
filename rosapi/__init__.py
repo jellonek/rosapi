@@ -1,7 +1,10 @@
+from __future__ import unicode_literals
+
 import binascii
 import hashlib
 import logging
 import socket
+import sys
 
 from .retryloop import RetryError
 from .retryloop import retryloop
@@ -36,21 +39,74 @@ class RosAPIFatalError(RosAPIError):
     pass
 
 
+class RosApiLengthUtils(object):
+    def __init__(self, api):
+        self.api = api
+
+    def write_lenght(self, length):
+        self.api.write_bytes(self.length_to_bytes(length))
+
+    def length_to_bytes(self, length):
+        if length < 0x80:
+            return self.to_bytes(length, 1)
+        elif length < 0x4000:
+            length |= 0x8000
+            return self.to_bytes(length, 2)
+        elif length < 0x200000:
+            length |= 0xC00000
+            return self.to_bytes(length, 3)
+        elif length < 0x10000000:
+            length |= 0xE0000000
+            return self.to_bytes(length, 4)
+        else:
+            return self.to_bytes(0xF0, 1) + self.to_bytes(length, 4)
+
+    def read_length(self):
+        b = self.api.read_bytes(1)
+        i = self.from_bytes(b)
+        if (i & 0x80) == 0x00:
+            return i
+        elif (i & 0xC0) == 0x80:
+            return self._unpack(1, i & ~0xC0)
+        elif (i & 0xE0) == 0xC0:
+            return self._unpack(2, i & ~0xE0)
+        elif (i & 0xF0) == 0xE0:
+            return self._unpack(3, i & ~0xF0)
+        elif (i & 0xF8) == 0xF0:
+            return self.from_bytes(self.api.read_bytes(1))
+        else:
+            raise RosAPIFatalError('Unknown value: %x' % i)
+
+    def _unpack(self, times, i):
+        res = i.to_bytes(1, 'big') + self.api.read_bytes(times)
+        return self.from_bytes(res)
+
+    if sys.version_info.major >= 3 and sys.version_info.minor >= 2:
+        def from_bytes(self, bytes):
+            return int.from_bytes(bytes, 'big')
+
+        def to_bytes(self, i, size):
+            return i.to_bytes(size, 'big')
+    else:
+        raise NotImplementedError()
+
+
 class RosAPI(object):
     """Routeros api"""
 
     def __init__(self, socket):
         self.socket = socket
+        self.length_utils = RosApiLengthUtils(self)
 
     def login(self, username, pwd):
-        for _, attrs in self.talk(['/login']):
-            token = binascii.unhexlify(attrs['ret'])
+        for _, attrs in self.talk([b'/login']):
+            token = binascii.unhexlify(attrs[b'ret'])
         hasher = hashlib.md5()
         hasher.update(b'\x00')
-        hasher.update(pwd.encode('utf-8'))
+        hasher.update(pwd)
         hasher.update(token)
-        self.talk(['/login', '=name=' + username,
-                   '=response=00' + hasher.hexdigest()])
+        self.talk([b'/login', b'=name=' + username,
+                   b'=response=00' + hasher.hexdigest().encode('ascii')])
 
     def talk(self, words):
         if self.write_sentence(words) == 0:
@@ -64,16 +120,16 @@ class RosAPI(object):
             reply = input_sentence.pop(0)
             for line in input_sentence:
                 try:
-                    second_eq_pos = line.index('=', 1)
+                    second_eq_pos = line.index(b'=', 1)
                 except IndexError:
                     attrs[line[1:]] = ''
                 else:
                     attrs[line[1:second_eq_pos]] = line[second_eq_pos + 1:]
             output.append((reply, attrs))
-            if reply == '!done':
-                if output[0][0] == '!trap':
+            if reply == b'!done':
+                if output[0][0] == b'!trap':
                     raise RosAPIError(output[0][1])
-                if output[0][0] == '!fatal':
+                if output[0][0] == b'!fatal':
                     self.socket.close()
                     raise RosAPIFatalError(output[0][1])
                 return output
@@ -96,84 +152,31 @@ class RosAPI(object):
 
     def write_word(self, word):
         logger.debug('>>> %s' % word)
-        self.write_lenght(len(word))
-        self.write_string(word)
+        self.length_utils.write_lenght(len(word))
+        self.write_bytes(word)
 
     def read_word(self):
-        word = self.read_string(self.read_length())
+        word = self.read_bytes(self.length_utils.read_length())
         logger.debug('<<< %s' % word)
         return word
 
-    def write_lenght(self, length):
-        self.write_string(self.length_to_string(length))
-
-    def length_to_string(self, length):
-        if length < 0x80:
-            return chr(length)
-        elif length < 0x4000:
-            length |= 0x8000
-            return self._pack(2, length)
-        elif length < 0x200000:
-            length |= 0xC00000
-            return self._pack(3, length)
-        elif length < 0x10000000:
-            length |= 0xE0000000
-            return self._pack(4, length)
-        else:
-            return chr(0xF0) + self._pack(4, length)
-
-    @staticmethod
-    def _pack(times, length):
-        output = ''
-        while times:
-            output = chr(length & 0xFF) + output
-            times -= 1
-            length >>= 8
-        return output
-
-    def read_length(self):
-        i = ord(self.read_string(1))
-        if (i & 0x80) == 0x00:
-            pass
-        elif (i & 0xC0) == 0x80:
-            i &= ~0xC0
-            i = self._unpack(1, i)
-        elif (i & 0xE0) == 0xC0:
-            i &= ~0xE0
-            i = self._unpack(2, i)
-        elif (i & 0xF0) == 0xE0:
-            i &= ~0xF0
-            i = self._unpack(3, i)
-        elif (i & 0xF8) == 0xF0:
-            i = ord(self.read_string(1))
-        else:
-            raise RosAPIFatalError('Unknown value: %x' % i)
-        return i
-
-    def _unpack(self, times, i):
-        while times:
-            i <<= 8
-            i += ord(self.read_string(1))
-            times -= 1
-        return i
-
-    def write_string(self, string):
+    def write_bytes(self, data):
         sent_overal = 0
-        while sent_overal < len(string):
+        while sent_overal < len(data):
             try:
-                sent = self.socket.send(string[sent_overal:].encode('utf-8'))
+                sent = self.socket.send(data[sent_overal:])
             except socket.error as e:
                 raise RosAPIConnectionError(str(e))
             if sent == 0:
                 raise RosAPIConnectionError('Connection closed by remote end.')
             sent_overal += sent
 
-    def read_string(self, length):
-        received_overal = ''
+    def read_bytes(self, length):
+        received_overal = b''
         while len(received_overal) < length:
             try:
                 received = self.socket.recv(
-                    length - len(received_overal)).decode('utf-8')
+                    length - len(received_overal))
             except socket.error as e:
                 raise RosAPIConnectionError(str(e))
             if len(received) == 0:
@@ -182,20 +185,21 @@ class RosAPI(object):
         return received_overal
 
 
-class RouterboardResource(object):
+class BaseRouterboardResource(object):
     def __init__(self, api, namespace):
         self.api = api
         self.namespace = namespace
 
-    def call(self, command, is_query, **kwargs):
-        command_arguments = self._prepare_arguments(is_query, **kwargs)
-        response = self.api.api_client.talk(
-            ['%s/%s' % (self.namespace, command)] +
-            command_arguments)
+    def call(self, command, query_kwargs, set_kwargs):
+        query_arguments = self._prepare_arguments(True, **query_kwargs)
+        set_arguments = self._prepare_arguments(False, **set_kwargs)
+        query = ([('%s/%s' % (self.namespace, command)).encode('ascii')] +
+                 query_arguments + set_arguments)
+        response = self.api.api_client.talk(query)
 
         output = []
         for response_type, attributes in response:
-            if response_type == '!re':
+            if response_type == b'!re':
                 output.append(self._remove_first_char_from_keys(attributes))
 
         return output
@@ -209,34 +213,66 @@ class RouterboardResource(object):
             key = key.replace('_', '-')
             selector_char = '?' if is_query else '='
             command_arguments.append(
-                '%s%s=%s' % (selector_char, key, value))
+                ('%s%s=' % (selector_char, key)).encode('ascii') + value)
 
         return command_arguments
 
     @staticmethod
     def _remove_first_char_from_keys(dictionary):
         elements = []
-        for key, value in dictionary.tems():
+        for key, value in dictionary.items():
+            key = key.decode('ascii')
             if key in ['.id', '.proplist']:
                 key = key[1:]
             elements.append((key, value))
         return dict(elements)
 
     def get(self, **kwargs):
-        return self.call('print', True, **kwargs)
+        return self.call('print', kwargs, {})
 
     def detailed_get(self, **kwargs):
-        kwargs['detail'] = kwargs.pop('detail', '')
-        return self.call('print', False, **kwargs)
+        return self.call('print', kwargs, {'detail': b''})
 
     def set(self, **kwargs):
-        return self.call('set', False, **kwargs)
+        return self.call('set', {}, kwargs)
 
     def add(self, **kwargs):
-        return self.call('add', False, **kwargs)
+        return self.call('add', {}. kwargs)
 
     def remove(self, **kwargs):
-        return self.call('remove', False, **kwargs)
+        return self.call('remove', {}, kwargs)
+
+
+class RouterboardResource(BaseRouterboardResource):
+    def _encode_kwargs(self, kwargs):
+        return dict((k, v.encode('ascii')) for k, v in kwargs.items())
+
+    def get(self, **kwargs):
+        return super(RouterboardResource, self).get(
+            **self._encode_kwargs(kwargs))
+
+    def detailed_get(self, **kwargs):
+        return super(RouterboardResource, self).detailed_get(
+            **self._encode_kwargs(kwargs))
+
+    def set(self, **kwargs):
+        return super(RouterboardResource, self).set(
+            **self._encode_kwargs(kwargs))
+
+    def add(self, **kwargs):
+        return super(RouterboardResource, self).add(
+            **self._encode_kwargs(kwargs))
+
+    def remove(self, **kwargs):
+        return super(RouterboardResource, self).remove(
+            **self._encode_kwargs(kwargs))
+
+    def call(self, *args, **kwargs):
+        result = super(RouterboardResource, self).call(*args, **kwargs)
+        for item in result:
+            for k in item:
+                item[k] = item[k].decode('ascii')
+        return result
 
 
 class RouterboardAPI(object):
@@ -276,10 +312,14 @@ class RouterboardAPI(object):
         self.api_client = RosAPI(sock)
 
     def login(self):
-        self.api_client.login(self.username, self.password)
+        self.api_client.login(self.username.encode('ascii'),
+                              self.password.encode('ascii'))
 
     def get_resource(self, namespace):
         return RouterboardResource(self, namespace)
+
+    def get_base_resource(self, namespace):
+        return BaseRouterboardResource(self, namespace)
 
     def close_connection(self):
         self.socket.close()
