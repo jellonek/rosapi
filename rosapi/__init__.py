@@ -97,17 +97,17 @@ class RosAPI(object):
     def write_word(self, word):
         logger.debug('>>> %s' % word)
         self.write_lenght(len(word))
-        self.write_string(word)
+        self.write_bytes(word)
 
     def read_word(self):
-        word = self.read_string(self.read_length())
+        word = self.read_bytes(self.read_length())
         logger.debug('<<< %s' % word)
         return word
 
     def write_lenght(self, length):
-        self.write_string(self.length_to_string(length))
+        self.write_bytes(self.length_to_bytes(length))
 
-    def length_to_string(self, length):
+    def length_to_bytes(self, length):
         if length < 0x80:
             return length.to_bytes(1, 'big')
         elif length < 0x4000:
@@ -123,7 +123,7 @@ class RosAPI(object):
             return (0xF0).to_bytes(1, 'big') + length.to_bytes(4, 'big')
 
     def read_length(self):
-        b = self.read_string(1)
+        b = self.read_bytes(1)
         i = int.from_bytes(b, 'big')
         if (i & 0x80) == 0x00:
             return i
@@ -134,26 +134,26 @@ class RosAPI(object):
         elif (i & 0xF0) == 0xE0:
             return self._unpack(3, i & ~0xF0)
         elif (i & 0xF8) == 0xF0:
-            return int.from_bytes(self.read_string(1), 'big')
+            return int.from_bytes(self.read_bytes(1), 'big')
         else:
             raise RosAPIFatalError('Unknown value: %x' % i)
 
     def _unpack(self, times, i):
-        res = i.to_bytes(1, 'big') + self.read_string(times)
+        res = i.to_bytes(1, 'big') + self.read_bytes(times)
         return int.from_bytes(res, 'big')
 
-    def write_string(self, string):
+    def write_bytes(self, data):
         sent_overal = 0
-        while sent_overal < len(string):
+        while sent_overal < len(data):
             try:
-                sent = self.socket.send(string[sent_overal:])
+                sent = self.socket.send(data[sent_overal:])
             except socket.error as e:
                 raise RosAPIConnectionError(str(e))
             if sent == 0:
                 raise RosAPIConnectionError('Connection closed by remote end.')
             sent_overal += sent
 
-    def read_string(self, length):
+    def read_bytes(self, length):
         received_overal = b''
         while len(received_overal) < length:
             try:
