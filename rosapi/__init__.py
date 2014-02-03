@@ -1,7 +1,10 @@
+from __future__ import unicode_literals
+
 import binascii
 import hashlib
 import logging
 import socket
+import sys
 
 from .retryloop import RetryError
 from .retryloop import retryloop
@@ -36,11 +39,64 @@ class RosAPIFatalError(RosAPIError):
     pass
 
 
+class RosApiLengthUtils(object):
+    def __init__(self, api):
+        self.api = api
+
+    def write_lenght(self, length):
+        self.api.write_bytes(self.length_to_bytes(length))
+
+    def length_to_bytes(self, length):
+        if length < 0x80:
+            return self.to_bytes(length, 1)
+        elif length < 0x4000:
+            length |= 0x8000
+            return self.to_bytes(length, 2)
+        elif length < 0x200000:
+            length |= 0xC00000
+            return self.to_bytes(length, 3)
+        elif length < 0x10000000:
+            length |= 0xE0000000
+            return self.to_bytes(length, 4)
+        else:
+            return self.to_bytes(0xF0, 1) + self.to_bytes(length, 4)
+
+    def read_length(self):
+        b = self.api.read_bytes(1)
+        i = self.from_bytes(b)
+        if (i & 0x80) == 0x00:
+            return i
+        elif (i & 0xC0) == 0x80:
+            return self._unpack(1, i & ~0xC0)
+        elif (i & 0xE0) == 0xC0:
+            return self._unpack(2, i & ~0xE0)
+        elif (i & 0xF0) == 0xE0:
+            return self._unpack(3, i & ~0xF0)
+        elif (i & 0xF8) == 0xF0:
+            return self.from_bytes(self.api.read_bytes(1))
+        else:
+            raise RosAPIFatalError('Unknown value: %x' % i)
+
+    def _unpack(self, times, i):
+        res = i.to_bytes(1, 'big') + self.api.read_bytes(times)
+        return self.from_bytes(res)
+
+    if sys.version_info.major >= 3 and sys.version_info.minor >= 2:
+        def from_bytes(self, bytes):
+            return int.from_bytes(bytes, 'big')
+
+        def to_bytes(self, i, size):
+            return i.to_bytes(size, 'big')
+    else:
+        raise NotImplementedError()
+
+
 class RosAPI(object):
     """Routeros api"""
 
     def __init__(self, socket):
         self.socket = socket
+        self.length_utils = RosApiLengthUtils(self)
 
     def login(self, username, pwd):
         for _, attrs in self.talk([b'/login']):
@@ -96,51 +152,13 @@ class RosAPI(object):
 
     def write_word(self, word):
         logger.debug('>>> %s' % word)
-        self.write_lenght(len(word))
+        self.length_utils.write_lenght(len(word))
         self.write_bytes(word)
 
     def read_word(self):
-        word = self.read_bytes(self.read_length())
+        word = self.read_bytes(self.length_utils.read_length())
         logger.debug('<<< %s' % word)
         return word
-
-    def write_lenght(self, length):
-        self.write_bytes(self.length_to_bytes(length))
-
-    def length_to_bytes(self, length):
-        if length < 0x80:
-            return length.to_bytes(1, 'big')
-        elif length < 0x4000:
-            length |= 0x8000
-            return length.to_bytes(2, 'big')
-        elif length < 0x200000:
-            length |= 0xC00000
-            return length.to_bytes(3, 'big')
-        elif length < 0x10000000:
-            length |= 0xE0000000
-            return length.to_bytes(4, 'big')
-        else:
-            return (0xF0).to_bytes(1, 'big') + length.to_bytes(4, 'big')
-
-    def read_length(self):
-        b = self.read_bytes(1)
-        i = int.from_bytes(b, 'big')
-        if (i & 0x80) == 0x00:
-            return i
-        elif (i & 0xC0) == 0x80:
-            return self._unpack(1, i & ~0xC0)
-        elif (i & 0xE0) == 0xC0:
-            return self._unpack(2, i & ~0xE0)
-        elif (i & 0xF0) == 0xE0:
-            return self._unpack(3, i & ~0xF0)
-        elif (i & 0xF8) == 0xF0:
-            return int.from_bytes(self.read_bytes(1), 'big')
-        else:
-            raise RosAPIFatalError('Unknown value: %x' % i)
-
-    def _unpack(self, times, i):
-        res = i.to_bytes(1, 'big') + self.read_bytes(times)
-        return int.from_bytes(res, 'big')
 
     def write_bytes(self, data):
         sent_overal = 0
