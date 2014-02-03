@@ -15,7 +15,9 @@ setup(
     long_description=README,
     url='https://github.com/jellonek/rosapi',
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        'Development Status :: 3 - Alpha',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.3',
         'Topic :: Software Development :: Libraries',
         'Topic :: System :: Systems Administration',
     ],

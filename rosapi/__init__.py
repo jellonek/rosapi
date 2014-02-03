@@ -10,7 +10,7 @@ from .retryloop import RetryError
 from .retryloop import retryloop
 from .socket_utils import set_keepalive
 
-
+PY2 = sys.version_info.major < 3
 logger = logging.getLogger(__name__)
 
 
@@ -48,7 +48,7 @@ class RosApiLengthUtils(object):
 
     def length_to_bytes(self, length):
         if length < 0x80:
-            return self.to_bytes(length, 1)
+            return self.to_bytes(length)
         elif length < 0x4000:
             length |= 0x8000
             return self.to_bytes(length, 2)
@@ -59,7 +59,7 @@ class RosApiLengthUtils(object):
             length |= 0xE0000000
             return self.to_bytes(length, 4)
         else:
-            return self.to_bytes(0xF0, 1) + self.to_bytes(length, 4)
+            return self.to_bytes(0xF0) + self.to_bytes(length, 4)
 
     def read_length(self):
         b = self.api.read_bytes(1)
@@ -78,17 +78,30 @@ class RosApiLengthUtils(object):
             raise RosAPIFatalError('Unknown value: %x' % i)
 
     def _unpack(self, times, i):
-        res = i.to_bytes(1, 'big') + self.api.read_bytes(times)
+        res = self.to_bytes(i) + self.api.read_bytes(times)
         return self.from_bytes(res)
 
-    if sys.version_info.major >= 3 and sys.version_info.minor >= 2:
-        def from_bytes(self, bytes):
-            return int.from_bytes(bytes, 'big')
+    if PY2:
+        def from_bytes(self, data):
+            data_values = [ord(char) for char in data]
+            value = 0
+            for byte_value in data_values:
+                value <<= 8
+                value += byte_value
+            return value
 
-        def to_bytes(self, i, size):
-            return i.to_bytes(size, 'big')
+        def to_bytes(self, i, size=1):
+            data = []
+            for _ in xrange(size):
+                data.append(chr(i & 0xff))
+                i >>= 8
+            return ''.join(reversed(data))
     else:
-        raise NotImplementedError()
+        def from_bytes(self, data):
+            return int.from_bytes(data, 'big')
+
+        def to_bytes(self, i, size=1):
+            return i.to_bytes(size, 'big')
 
 
 class RosAPI(object):
@@ -122,7 +135,7 @@ class RosAPI(object):
                 try:
                     second_eq_pos = line.index(b'=', 1)
                 except IndexError:
-                    attrs[line[1:]] = ''
+                    attrs[line[1:]] = b''
                 else:
                     attrs[line[1:second_eq_pos]] = line[second_eq_pos + 1:]
             output.append((reply, attrs))
@@ -139,7 +152,7 @@ class RosAPI(object):
         for word in words:
             self.write_word(word)
             words_written += 1
-        self.write_word('')
+        self.write_word(b'')
         return words_written
 
     def read_sentence(self):
@@ -190,7 +203,8 @@ class BaseRouterboardResource(object):
         self.api = api
         self.namespace = namespace
 
-    def call(self, command, query_kwargs, set_kwargs):
+    def call(self, command, set_kwargs, query_kwargs=None):
+        query_kwargs = query_kwargs or {}
         query_arguments = self._prepare_arguments(True, **query_kwargs)
         set_arguments = self._prepare_arguments(False, **set_kwargs)
         query = ([('%s/%s' % (self.namespace, command)).encode('ascii')] +
@@ -228,19 +242,19 @@ class BaseRouterboardResource(object):
         return dict(elements)
 
     def get(self, **kwargs):
-        return self.call('print', kwargs, {})
+        return self.call('print', {}, kwargs)
 
     def detailed_get(self, **kwargs):
-        return self.call('print', kwargs, {'detail': b''})
+        return self.call('print', {'detail': b''}, kwargs)
 
     def set(self, **kwargs):
-        return self.call('set', {}, kwargs)
+        return self.call('set', kwargs)
 
     def add(self, **kwargs):
-        return self.call('add', {}. kwargs)
+        return self.call('add', kwargs)
 
     def remove(self, **kwargs):
-        return self.call('remove', {}, kwargs)
+        return self.call('remove', kwargs)
 
 
 class RouterboardResource(BaseRouterboardResource):
