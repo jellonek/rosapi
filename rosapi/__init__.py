@@ -258,35 +258,21 @@ class BaseRouterboardResource(object):
 
 
 class RouterboardResource(BaseRouterboardResource):
-    def _encode_kwargs(self, kwargs):
-        return dict((k, v.encode('ascii')) for k, v in kwargs.items())
-
-    def get(self, **kwargs):
-        return super(RouterboardResource, self).get(
-            **self._encode_kwargs(kwargs))
-
     def detailed_get(self, **kwargs):
-        return super(RouterboardResource, self).detailed_get(
-            **self._encode_kwargs(kwargs))
+        return self.call('print', {'detail': ''}, kwargs)
 
-    def set(self, **kwargs):
-        return super(RouterboardResource, self).set(
-            **self._encode_kwargs(kwargs))
-
-    def add(self, **kwargs):
-        return super(RouterboardResource, self).add(
-            **self._encode_kwargs(kwargs))
-
-    def remove(self, **kwargs):
-        return super(RouterboardResource, self).remove(
-            **self._encode_kwargs(kwargs))
-
-    def call(self, *args, **kwargs):
-        result = super(RouterboardResource, self).call(*args, **kwargs)
+    def call(self, command, set_kwargs, query_kwargs=None):
+        query_kwargs = query_kwargs or {}
+        result = super(RouterboardResource, self).call(
+            command, self._encode_kwargs(set_kwargs),
+            self._encode_kwargs(query_kwargs))
         for item in result:
             for k in item:
                 item[k] = item[k].decode('ascii')
         return result
+
+    def _encode_kwargs(self, kwargs):
+        return dict((k, v.encode('ascii')) for k, v in kwargs.items())
 
 
 class RouterboardAPI(object):
