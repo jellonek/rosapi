@@ -26,8 +26,10 @@ def retryloop(attempts, timeout=None, delay=0, backoff=1):
 
     # No pending exception? Make one
     if e is None:
-        try: raise RetryError
-        except RetryError as e: pass
+        try:
+            raise RetryError
+        except RetryError as exc:
+            e = exc
 
     # Decorate exception with retry information:
     e.args = e.args + ("on attempt {0} of {1} after {2:.3f} seconds".format(
