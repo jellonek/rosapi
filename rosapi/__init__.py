@@ -294,7 +294,7 @@ class RouterboardAPI(object):
         if self.socket:
             self.close_connection()
         try:
-            for retry in retryloop(10, timeout=30):
+            for retry in retryloop(10, delay=0.1, timeout=30):
                 try:
                     self.connect()
                     self.login()
