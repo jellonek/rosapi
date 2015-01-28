@@ -10,7 +10,7 @@ from .retryloop import RetryError
 from .retryloop import retryloop
 from .socket_utils import set_keepalive
 
-PY2 = sys.version_info.major < 3
+PY2 = sys.version_info[0] < 3
 logger = logging.getLogger(__name__)
 
 
