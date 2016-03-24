@@ -5,6 +5,7 @@ import hashlib
 import logging
 import socket
 import sys
+import ssl
 
 from .retryloop import RetryError
 from .retryloop import retryloop
@@ -276,12 +277,13 @@ class RouterboardResource(BaseRouterboardResource):
 
 
 class RouterboardAPI(object):
-    def __init__(self, host, username='api', password='', port=8728):
+    def __init__(self, host, username='api', password='', port=8728, ssl=False):
         self.host = host
         self.username = username
         self.password = password
         self.socket = None
         self.port = port
+        self.ssl = ssl
         self.reconnect()
 
     def __enter__(self):
@@ -308,8 +310,14 @@ class RouterboardAPI(object):
         sock.settimeout(15.0)
         sock.connect((self.host, self.port))
         set_keepalive(sock, after_idle_sec=10)
-        self.socket = sock
-        self.api_client = RosAPI(sock)
+        if self.ssl:
+            try:
+                self.socket = ssl.wrap_socket(sock)
+            except ssl.SSLError as e:
+                raise RosAPIConnectionError(str(e))
+        else:
+            self.socket = sock
+        self.api_client = RosAPI(self.socket)
 
     def login(self):
         self.api_client.login(self.username.encode('ascii'),
