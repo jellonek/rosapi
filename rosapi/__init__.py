@@ -1,11 +1,12 @@
 from __future__ import unicode_literals
 
 import binascii
-import hashlib
 import logging
 import socket
-import sys
 import ssl
+import sys
+
+from hashlib import md5
 
 from .retryloop import RetryError
 from .retryloop import retryloop
@@ -112,15 +113,12 @@ class RosAPI(object):
         self.socket = socket
         self.length_utils = RosApiLengthUtils(self)
 
-    def login(self, username, pwd):
+    def login(self, username, password):
         for _, attrs in self.talk([b'/login']):
             token = binascii.unhexlify(attrs[b'ret'])
-        hasher = hashlib.md5()
-        hasher.update(b'\x00')
-        hasher.update(pwd)
-        hasher.update(token)
+        md5_hash = md5(b'\x00' + password + token).hexdigest().encode('ascii')
         self.talk([b'/login', b'=name=' + username,
-                   b'=response=00' + hasher.hexdigest().encode('ascii')])
+                   b'=response=00' + md5_hash])
 
     def talk(self, words):
         if self.write_sentence(words) == 0:
