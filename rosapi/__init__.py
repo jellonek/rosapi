@@ -75,7 +75,7 @@ class RosApiLengthUtils(object):
         elif (i & 0xF0) == 0xE0:
             return self._unpack(3, i & ~0xF0)
         elif (i & 0xF8) == 0xF0:
-            return self.from_bytes(self.api.read_bytes(1))
+            return self.from_bytes(self.api.read_bytes(4))
         else:
             raise RosAPIFatalError('Unknown value: %x' % i)
 
