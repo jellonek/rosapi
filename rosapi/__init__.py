@@ -278,13 +278,14 @@ class RouterboardResource(BaseRouterboardResource):
 
 
 class RouterboardAPI(object):
-    def __init__(self, host, username='api', password='', port=8728, ssl=False):
+    def __init__(self, host, username='api', password='', port=8728, ssl=False, legacy_login=False):
         self.host = host
         self.username = username
         self.password = password
         self.socket = None
         self.port = port
         self.ssl = ssl
+        self.legacy_login = legacy_login
         self.reconnect()
 
     def __enter__(self):
@@ -322,7 +323,8 @@ class RouterboardAPI(object):
 
     def login(self):
         self.api_client.login(self.username.encode('ascii'),
-                              self.password.encode('ascii'))
+                              self.password.encode('ascii'),
+                              self.legacy_login)
 
     def get_resource(self, namespace):
         return RouterboardResource(self, namespace)
