@@ -113,12 +113,15 @@ class RosAPI(object):
         self.socket = socket
         self.length_utils = RosApiLengthUtils(self)
 
-    def login(self, username, password):
-        for _, attrs in self.talk([b'/login']):
-            token = binascii.unhexlify(attrs[b'ret'])
-        md5_hash = md5(b'\x00' + password + token).hexdigest().encode('ascii')
-        self.talk([b'/login', b'=name=' + username,
-                   b'=response=00' + md5_hash])
+    def login(self, username, password, legacy=False):
+        if legacy:
+            for _, attrs in self.talk([b'/login']):
+                token = binascii.unhexlify(attrs[b'ret'])
+            md5_hash = md5(b'\x00' + password + token).hexdigest().encode('ascii')
+            self.talk([b'/login', b'=name=' + username,
+                    b'=response=00' + md5_hash])
+        else:
+            self.talk([b'/login', b'=name=' + username, b'=password=' + password])
 
     def talk(self, words):
         if self.write_sentence(words) == 0:
